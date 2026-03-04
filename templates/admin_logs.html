@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Access Logs — SecureHealth{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('admin.dashboard') }}">Admin</a></li>
+<li class="breadcrumb-item active">Access Logs</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h4 class="fw-bold mb-0">Access Audit Log</h4>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('admin.logs') }}" class="btn btn-sm {{ 'btn-primary' if not anomalies_only else 'btn-outline-secondary' }}">All Logs</a>
+    <a href="{{ url_for('admin.logs') }}?anomalies=1" class="btn btn-sm {{ 'btn-danger' if anomalies_only else 'btn-outline-danger' }}">
+      Anomalies Only
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Time</th><th>User</th><th>Role</th><th>Action</th>
+          <th>Patient</th><th>Detail</th><th>IP</th><th>Anomaly</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs.items %}
+        <tr class="{{ 'anomaly-row' if log.is_anomalous }}">
+          <td class="small text-nowrap">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+          <td class="small font-monospace">{{ log.user.username if log.user else log.user_id }}</td>
+          <td><span class="badge bg-secondary small">{{ log.user_role or '—' }}</span></td>
+          <td><span class="badge bg-dark">{{ log.action }}</span></td>
+          <td class="small font-monospace">{{ log.patient.mrn if log.patient else '—' }}</td>
+          <td class="small" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ log.detail }}">
+            {{ log.detail or '—' }}
+          </td>
+          <td class="small text-muted">{{ log.ip_address or '—' }}</td>
+          <td>
+            {% if log.is_anomalous %}
+            <span class="badge bg-danger" title="{{ log.anomaly_reason }}">⚠ Yes</span>
+            {% else %}
+            <span class="badge bg-light text-dark border">OK</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-4">No log entries yet</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if logs.pages > 1 %}
+  <div class="card-footer">
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        {% if logs.has_prev %}
+        <li class="page-item"><a class="page-link" href="?page={{ logs.prev_num }}{% if anomalies_only %}&anomalies=1{% endif %}">Prev</a></li>
+        {% endif %}
+        <li class="page-item disabled"><span class="page-link">Page {{ logs.page }} / {{ logs.pages }}</span></li>
+        {% if logs.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ logs.next_num }}{% if anomalies_only %}&anomalies=1{% endif %}">Next</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

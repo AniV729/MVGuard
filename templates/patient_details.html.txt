@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Details</title>
+</head>
+<body>
+    <h2>Patient Details</h2>
+    <p>Name: {{ patient.name }}</p>
+    <p>Encrypted Data: {{ patient.encrypted_data }}</p>
+    <p>Decrypted Data: {{ decrypted_data }}</p>
+</body>
+</html>

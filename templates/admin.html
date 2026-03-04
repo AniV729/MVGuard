@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel — SecureHealth{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Admin Panel</li>
+{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold mb-4">Admin Panel</h4>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="card text-center p-3">
+    <div class="display-6 fw-bold text-primary">{{ total_users }}</div>
+    <div class="text-muted small">Staff Accounts</div>
+  </div></div>
+  <div class="col-md-3"><div class="card text-center p-3">
+    <div class="display-6 fw-bold text-success">{{ total_patients }}</div>
+    <div class="text-muted small">Patients</div>
+  </div></div>
+  <div class="col-md-3"><div class="card text-center p-3">
+    <div class="display-6 fw-bold text-secondary">{{ total_logs }}</div>
+    <div class="text-muted small">Audit Log Entries</div>
+  </div></div>
+  <div class="col-md-3"><div class="card text-center p-3">
+    <div class="display-6 fw-bold text-danger">{{ anomaly_count }}</div>
+    <div class="text-muted small">Flagged Anomalies</div>
+  </div></div>
+</div>
+
+<!-- Actions -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <a href="{{ url_for('admin.users') }}" class="card text-decoration-none p-3 d-flex flex-row align-items-center gap-3">
+      <i class="bi bi-people-fill text-primary fs-3"></i>
+      <div><div class="fw-semibold">User Management</div><div class="text-muted small">Activate, deactivate, rotate keys</div></div>
+    </a>
+  </div>
+  <div class="col-md-4">
+    <a href="{{ url_for('admin.logs') }}" class="card text-decoration-none p-3 d-flex flex-row align-items-center gap-3">
+      <i class="bi bi-journal-text text-secondary fs-3"></i>
+      <div><div class="fw-semibold">Access Logs</div><div class="text-muted small">Full audit trail</div></div>
+    </a>
+  </div>
+  <div class="col-md-4">
+    <form method="POST" action="{{ url_for('admin.fit_anomaly_model') }}" class="card text-decoration-none p-3 d-flex flex-row align-items-center gap-3"
+          style="cursor:pointer;" onsubmit="this.querySelector('button').disabled=true">
+      <i class="bi bi-cpu fs-3 text-success"></i>
+      <div>
+        <button type="submit" class="btn btn-link p-0 fw-semibold text-dark text-decoration-none">Fit Anomaly Model</button>
+        <div class="text-muted small">Re-train IsolationForest on all logs</div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Recent anomalies -->
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i>Recent Anomalies</span>
+    <a href="{{ url_for('admin.logs') }}?anomalies=1" class="btn btn-sm btn-outline-danger">View All</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr><th>Time</th><th>User</th><th>Action</th><th>Reason</th></tr>
+      </thead>
+      <tbody>
+        {% for log in recent_anomalies %}
+        <tr class="anomaly-row">
+          <td class="small">{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td class="small">{{ log.user.username if log.user else log.user_id }}</td>
+          <td><span class="badge bg-danger">{{ log.action }}</span></td>
+          <td class="small">{{ log.anomaly_reason or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-center text-muted py-3">No anomalies detected yet. Click "Fit Anomaly Model" after logging activity.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Key status -->
+<div class="card">
+  <div class="card-header"><i class="bi bi-key me-1"></i>Encryption Key Status</div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr><th>Key Label</th><th>Algorithm</th><th>User</th><th>Created</th><th>Rotated</th></tr>
+      </thead>
+      <tbody>
+        {% for k in keys_status %}
+        <tr>
+          <td class="font-monospace small">{{ k.key_label }}</td>
+          <td><span class="badge badge-pq">{{ k.algorithm }}</span></td>
+          <td>{{ k.user.username if k.user else '—' }}</td>
+          <td class="small text-muted">{{ k.created_at.strftime('%Y-%m-%d') }}</td>
+          <td class="small text-muted">{{ k.rotated_at.strftime('%Y-%m-%d') if k.rotated_at else 'Never' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-3">No keys present</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

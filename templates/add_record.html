@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Add Record — SecureHealth{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('patients.list_patients') }}">Patients</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('patients.patient_detail', patient_id=patient.id) }}">{{ patient.mrn }}</a></li>
+<li class="breadcrumb-item active">Add Record</li>
+{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold mb-4">Add Medical Record — <span class="font-monospace text-muted">{{ patient.mrn }}</span></h4>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card p-4">
+      <form method="POST">
+        <div class="mb-3">
+          <label class="form-label">Record Type</label>
+          <select name="record_type" class="form-select">
+            {% for rt in ['Admission Note','Progress Note','Discharge Summary','Lab Results','Imaging','Prescription','Referral','Consultation','Emergency'] %}
+            <option>{{ rt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <h6 class="text-muted text-uppercase mt-3 mb-2" style="font-size:.75rem;letter-spacing:1px;">
+          <i class="bi bi-lock-fill text-primary me-1"></i>Clinical Content (encrypted on save)
+        </h6>
+
+        <div class="mb-3">
+          <label class="form-label">Diagnosis / Conditions</label>
+          <textarea name="diagnosis" class="form-control" rows="2"
+                    placeholder="e.g. Type 2 Diabetes, Hypertension stage 2…" oninput="scanField(this)"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Medications</label>
+          <textarea name="medications" class="form-control" rows="2"
+                    placeholder="e.g. Metformin 500mg BD, Lisinopril 10mg OD…" oninput="scanField(this)"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Clinical Notes</label>
+          <textarea name="notes" class="form-control" rows="3"
+                    placeholder="Narrative notes, presenting complaints, plan…" oninput="scanField(this)"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Lab Results</label>
+          <textarea name="lab_results" class="form-control" rows="2"
+                    placeholder="e.g. HbA1c 8.2%, eGFR 55 mL/min…" oninput="scanField(this)"></textarea>
+        </div>
+
+        <div id="phiAlert" class="alert alert-warning small d-none mb-3">
+          <i class="bi bi-shield-exclamation me-1"></i>
+          <span id="phiAlertText">PHI detected — content will be encrypted.</span>
+        </div>
+
+        <h6 class="text-muted text-uppercase mt-3 mb-2" style="font-size:.75rem;letter-spacing:1px;">
+          Vital Signs (stored in plaintext for analytics)
+        </h6>
+
+        <div class="row">
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Systolic BP</label>
+            <div class="input-group"><input type="number" name="systolic_bp" class="form-control" placeholder="120"><span class="input-group-text">mmHg</span></div>
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Diastolic BP</label>
+            <div class="input-group"><input type="number" name="diastolic_bp" class="form-control" placeholder="80"><span class="input-group-text">mmHg</span></div>
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Heart Rate</label>
+            <div class="input-group"><input type="number" name="heart_rate" class="form-control" placeholder="72"><span class="input-group-text">bpm</span></div>
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">SpO₂</label>
+            <div class="input-group"><input type="number" name="spo2" class="form-control" placeholder="98" step="0.1"><span class="input-group-text">%</span></div>
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Temperature</label>
+            <div class="input-group"><input type="number" name="temperature_c" class="form-control" placeholder="37.0" step="0.1"><span class="input-group-text">°C</span></div>
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Weight</label>
+            <div class="input-group"><input type="number" name="weight_kg" class="form-control" placeholder="70" step="0.1"><span class="input-group-text">kg</span></div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-2">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-lock-fill me-1"></i>Encrypt &amp; Save
+          </button>
+          <a href="{{ url_for('patients.patient_detail', patient_id=patient.id) }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card p-3 bg-light border-0">
+      <h6 class="fw-semibold"><i class="bi bi-cpu me-1 text-success"></i>Live PHI Scanner</h6>
+      <div id="phiResult" class="small text-muted">Start typing to detect PHI…</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let scanTimeout;
+function scanField(el) {
+  clearTimeout(scanTimeout);
+  scanTimeout = setTimeout(async () => {
+    const text = el.value.trim();
+    if (!text) return;
+    const res = await fetch('{{ url_for("patients.phi_scan") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text})
+    });
+    const data = await res.json();
+    const rd = document.getElementById('phiResult');
+    const alert = document.getElementById('phiAlert');
+    if (data.phi_found) {
+      rd.innerHTML = `<span class="text-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.summary}</span>`;
+      alert.classList.remove('d-none');
+      document.getElementById('phiAlertText').textContent = data.summary;
+    } else {
+      rd.innerHTML = `<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>No PHI detected</span>`;
+      alert.classList.add('d-none');
+    }
+  }, 400);
+}
+</script>
+{% endblock %}

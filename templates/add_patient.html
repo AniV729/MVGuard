@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Enroll Patient — SecureHealth{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('patients.dashboard') }}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('patients.list_patients') }}">Patients</a></li>
+<li class="breadcrumb-item active">Enroll Patient</li>
+{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold mb-4">Enroll New Patient</h4>
+
+{% if error %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</div>
+{% endif %}
+
+{% if phi_warnings %}
+<div class="alert alert-warning">
+  <strong><i class="bi bi-shield-exclamation me-1"></i>PHI Detected in Fields</strong>
+  — these fields will be automatically encrypted:
+  <ul class="mb-0 mt-1">
+    {% for field, summary in phi_warnings.items() %}
+    <li><strong>{{ field }}</strong>: {{ summary }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="row">
+  <div class="col-lg-7">
+    <div class="card p-4">
+      <form method="POST" id="EnrollForm">
+        <h6 class="text-muted mb-3 text-uppercase" style="font-size:.78rem;letter-spacing:1px;">
+          <i class="bi bi-lock-fill me-1 text-primary"></i>PHI Fields (auto-encrypted on save)
+        </h6>
+
+        <div class="mb-3">
+          <label class="form-label">Full Name <span class="text-danger">*</span></label>
+          <input type="text" name="name" class="form-control phi-field" placeholder="Jane Smith"
+                 oninput="scanPHI(this)" required>
+          <div class="phi-alert small text-warning mt-1 d-none"></div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Date of Birth</label>
+            <input type="text" name="dob" class="form-control phi-field"
+                   placeholder="MM/DD/YYYY" oninput="scanPHI(this)">
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">SSN (optional)</label>
+            <input type="text" name="ssn" class="form-control phi-field"
+                   placeholder="XXX-XX-XXXX" oninput="scanPHI(this)">
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Address</label>
+          <input type="text" name="address" class="form-control phi-field"
+                 placeholder="123 Main St, City, State" oninput="scanPHI(this)">
+        </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Phone</label>
+            <input type="text" name="phone" class="form-control phi-field"
+                   placeholder="(555) 000-0000" oninput="scanPHI(this)">
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Email</label>
+            <input type="text" name="email_addr" class="form-control phi-field"
+                   placeholder="patient@example.com" oninput="scanPHI(this)">
+          </div>
+        </div>
+
+        <hr>
+        <h6 class="text-muted mb-3 text-uppercase" style="font-size:.78rem;letter-spacing:1px;">
+          Non-PHI Metadata (stored plaintext for search)
+        </h6>
+
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Blood Type</label>
+            <select name="blood_type" class="form-select">
+              <option value="">Unknown</option>
+              {% for bt in ['A+','A-','B+','B-','AB+','AB-','O+','O-'] %}
+              <option>{{ bt }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Sex</label>
+            <select name="sex" class="form-select">
+              <option value="">Unknown</option>
+              <option value="M">Male</option>
+              <option value="F">Female</option>
+              <option value="O">Other</option>
+            </select>
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Age at Admission</label>
+            <input type="number" name="age" class="form-control" min="0" max="130">
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-2">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-lock-fill me-1"></i> Encrypt &amp; Enroll
+          </button>
+          <a href="{{ url_for('patients.list_patients') }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card p-3 bg-light border-0 mb-3">
+      <h6 class="fw-semibold"><i class="bi bi-shield-lock me-1 text-primary"></i>How Encryption Works</h6>
+      <ol class="small text-muted ps-3 mb-0">
+        <li>PHI fields are detected using the built-in scanner.</li>
+        <li>Each field is encoded to UTF-8 bytes and padded.</li>
+        <li>Blocks of 8 bytes are encrypted via UOV over GF(256)
+            using your personal public key.</li>
+        <li>Ciphertext (≈2.5× expansion) is stored in the database.</li>
+        <li>Only you (or admins with your private key) can decrypt.</li>
+      </ol>
+    </div>
+    <div class="card p-3" id="phiPreview">
+      <h6 class="fw-semibold"><i class="bi bi-cpu me-1 text-success"></i>Live PHI Scanner</h6>
+      <p class="text-muted small mb-1">Type in any field above to see real-time PHI detection.</p>
+      <div id="phiResult" class="small text-muted">Waiting for input…</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let scanTimeout;
+function scanPHI(input) {
+  clearTimeout(scanTimeout);
+  scanTimeout = setTimeout(async () => {
+    const val = input.value.trim();
+    if (!val) return;
+    const res = await fetch('{{ url_for("patients.phi_scan") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text: val})
+    });
+    const data = await res.json();
+    const resultDiv = document.getElementById('phiResult');
+    if (data.phi_found) {
+      resultDiv.innerHTML = `<span class="text-warning">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+        ${data.summary}<br>
+        <small>Risk score: ${(data.risk_score*100).toFixed(0)}%</small>
+      </span>`;
+    } else {
+      resultDiv.innerHTML = `<span class="text-success">
+        <i class="bi bi-check-circle-fill me-1"></i> No PHI detected
+      </span>`;
+    }
+  }, 400);
+}
+</script>
+{% endblock %}

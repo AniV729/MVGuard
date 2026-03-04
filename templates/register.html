@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Register Staff — SecureHealth{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('admin.dashboard') }}">Admin</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('admin.users') }}">Users</a></li>
+<li class="breadcrumb-item active">Add Staff</li>
+{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold mb-4">Register New Staff Member</h4>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card p-4">
+      <form method="POST">
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Full Name <span class="text-danger">*</span></label>
+            <input type="text" name="full_name" class="form-control" required>
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Username <span class="text-danger">*</span></label>
+            <input type="text" name="username" class="form-control" required autocomplete="off">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Email <span class="text-danger">*</span></label>
+          <input type="email" name="email" class="form-control" required>
+        </div>
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Role <span class="text-danger">*</span></label>
+            <select name="role" class="form-select">
+              {% for r in roles %}
+              <option value="{{ r }}">{{ r | title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Department</label>
+            <input type="text" name="department" class="form-control" placeholder="e.g. Cardiology">
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Password <span class="text-danger">*</span></label>
+            <input type="password" name="password" class="form-control" minlength="8" required autocomplete="new-password">
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Confirm Password <span class="text-danger">*</span></label>
+            <input type="password" name="confirm_password" class="form-control" required>
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-person-check me-1"></i>Create Account &amp; Generate Key
+          </button>
+          <a href="{{ url_for('admin.users') }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card p-3 bg-light border-0">
+      <h6 class="fw-semibold"><i class="bi bi-info-circle me-1"></i>What happens on registration</h6>
+      <ol class="small text-muted ps-3">
+        <li>Staff account created with hashed password (Werkzeug PBKDF2-SHA256)</li>
+        <li>A unique <strong>UOV key pair</strong> is generated server-side:
+          <ul>
+            <li>Public key → stored in DB, used to encrypt patient records</li>
+            <li>Private key → stored in DB (in production: user-key-wrapped)</li>
+          </ul>
+        </li>
+        <li>Key generation takes a few seconds (GF(256) matrix operations)</li>
+        <li>Role determines decryption access: only <strong>Doctors</strong> and <strong>Admins</strong> can call the decrypt endpoint</li>
+      </ol>
+      <table class="table table-sm small">
+        <thead><tr><th>Role</th><th>Decrypt PHI</th><th>Add Records</th><th>Admin Panel</th></tr></thead>
+        <tbody>
+          <tr><td>Admin</td><td>✅</td><td>✅</td><td>✅</td></tr>
+          <tr><td>Doctor</td><td>✅</td><td>✅</td><td>❌</td></tr>
+          <tr><td>Nurse</td><td>❌</td><td>✅</td><td>❌</td></tr>
+          <tr><td>Analyst</td><td>❌</td><td>❌</td><td>❌</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

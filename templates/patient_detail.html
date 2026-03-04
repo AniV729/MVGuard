@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Patient {{ patient.mrn }} — SecureHealth{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('patients.dashboard') }}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('patients.list_patients') }}">Patients</a></li>
+<li class="breadcrumb-item active">{{ patient.mrn }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h4 class="fw-bold mb-0">
+      {% if decrypted %}
+        {{ decrypted.name or patient.mrn }}
+      {% else %}
+        Patient {{ patient.mrn }}
+      {% endif %}
+    </h4>
+    <small class="text-muted font-monospace">MRN: {{ patient.mrn }}</small>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('patients.add_record', patient_id=patient.id) }}" class="btn btn-sm btn-success">
+      <i class="bi bi-plus-circle me-1"></i>Add Record
+    </a>
+    {% if current_user.can_decrypt and not decrypted %}
+    <form method="POST" action="{{ url_for('patients.decrypt_patient', patient_id=patient.id) }}">
+      <button type="submit" class="btn btn-sm btn-warning"
+              onclick="return confirm('Decrypting will be logged in the audit trail. Continue?')">
+        <i class="bi bi-key-fill me-1"></i>Decrypt PHI
+      </button>
+    </form>
+    {% endif %}
+    {% if decrypted %}
+    <button class="btn btn-sm btn-outline-secondary" id="assessBtn" onclick="runAssessment()">
+      <i class="bi bi-cpu me-1"></i>AI Risk Assessment
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- PHI fields -->
+<div class="row g-4 mb-4">
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-person-vcard me-1"></i>Demographics</span>
+        {% if not decrypted %}
+        <span class="badge badge-pq"><i class="bi bi-lock-fill me-1"></i>Encrypted</span>
+        {% else %}
+        <span class="badge bg-warning text-dark"><i class="bi bi-lock-fill me-1"></i>Decrypted (audit logged)</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          {% macro phi_row(label, cipher, plain) %}
+          <tr>
+            <td class="text-muted" style="width:40%">{{ label }}</td>
+            <td>
+              {% if plain is defined and plain %}
+                <span class="text-dark">{{ plain }}</span>
+              {% elif cipher %}
+                <span class="encrypted-field" title="{{ cipher }}">{{ cipher[:60] }}…</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endmacro %}
+
+          {{ phi_row("Full Name",    patient.enc_name,    decrypted.name    if decrypted) }}
+          {{ phi_row("Date of Birth",patient.enc_dob,     decrypted.dob     if decrypted) }}
+          {{ phi_row("SSN",          patient.enc_ssn,     decrypted.ssn     if decrypted) }}
+          {{ phi_row("Address",      patient.enc_address, decrypted.address if decrypted) }}
+          {{ phi_row("Phone",        patient.enc_phone,   decrypted.phone   if decrypted) }}
+          {{ phi_row("Email",        patient.enc_email,   decrypted.email   if decrypted) }}
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-info-circle me-1"></i>Non-PHI Metadata</div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><td class="text-muted">MRN</td><td class="font-monospace">{{ patient.mrn }}</td></tr>
+          <tr><td class="text-muted">Blood Type</td><td>{{ patient.blood_type or '—' }}</td></tr>
+          <tr><td class="text-muted">Sex</td><td>{{ patient.sex or '—' }}</td></tr>
+          <tr><td class="text-muted">Age at Admission</td><td>{{ patient.age_at_admission or '—' }}</td></tr>
+          <tr><td class="text-muted">Enrolled</td><td>{{ patient.created_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AI Assessment Result (populated by JS) -->
+<div id="assessmentCard" class="card mb-4 d-none">
+  <div class="card-header"><i class="bi bi-cpu me-1"></i>AI Risk Assessment</div>
+  <div class="card-body" id="assessmentBody">Loading…</div>
+</div>
+
+<!-- Medical Records -->
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-clipboard2-pulse me-1"></i>Medical Records</span>
+    <span class="badge bg-secondary">{{ records | length }}</span>
+  </div>
+  {% if decrypted_records is defined and decrypted_records %}
+    {% for rec in decrypted_records %}
+    <div class="card-body border-bottom">
+      <div class="d-flex justify-content-between mb-2">
+        <span class="badge bg-secondary">{{ rec.type }}</span>
+        <small class="text-muted">{{ rec.date.strftime('%Y-%m-%d %H:%M') }}</small>
+      </div>
+      {% if rec.diagnosis %}
+      <p class="mb-1"><strong>Diagnosis:</strong> {{ rec.diagnosis }}</p>
+      {% endif %}
+      {% if rec.medications %}
+      <p class="mb-1"><strong>Medications:</strong> {{ rec.medications }}</p>
+      {% endif %}
+      {% if rec.notes %}
+      <p class="mb-1"><strong>Notes:</strong> {{ rec.notes }}</p>
+      {% endif %}
+      {% if rec.lab_results %}
+      <p class="mb-1"><strong>Lab Results:</strong> {{ rec.lab_results }}</p>
+      {% endif %}
+      {% set v = rec.vitals %}
+      {% if v.systolic_bp or v.heart_rate or v.spo2 %}
+      <div class="mt-2 d-flex gap-3 flex-wrap">
+        {% if v.systolic_bp %}<span class="badge bg-light text-dark border">BP {{ v.systolic_bp }}/{{ v.diastolic_bp }}</span>{% endif %}
+        {% if v.heart_rate  %}<span class="badge bg-light text-dark border">HR {{ v.heart_rate }} bpm</span>{% endif %}
+        {% if v.spo2        %}<span class="badge bg-light text-dark border">SpO₂ {{ v.spo2 }}%</span>{% endif %}
+        {% if v.temperature_c %}<span class="badge bg-light text-dark border">Temp {{ v.temperature_c }}°C</span>{% endif %}
+        {% if v.weight_kg   %}<span class="badge bg-light text-dark border">{{ v.weight_kg }} kg</span>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% elif records | length > 0 %}
+    <div class="card-body text-muted text-center py-4">
+      <i class="bi bi-lock-fill me-1"></i>
+      Records are encrypted. Click <strong>Decrypt PHI</strong> to view content.
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead class="table-light">
+          <tr><th>Type</th><th>Date</th><th>Content</th></tr>
+        </thead>
+        <tbody>
+          {% for r in records %}
+          <tr>
+            <td><span class="badge bg-secondary">{{ r.record_type }}</span></td>
+            <td class="small">{{ r.recorded_at.strftime('%Y-%m-%d') }}</td>
+            <td><span class="encrypted-field">{{ r.enc_diagnosis[:40] if r.enc_diagnosis else '—' }}…</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="card-body text-muted text-center py-4">
+      No records yet.
+      <a href="{{ url_for('patients.add_record', patient_id=patient.id) }}">Add the first record.</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if decrypted %}
+<script>
+async function runAssessment() {
+  document.getElementById('assessmentCard').classList.remove('d-none');
+  document.getElementById('assessmentBody').innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Running AI assessment…';
+  const res = await fetch('{{ url_for("patients.assess_patient", patient_id=patient.id) }}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+  });
+  const data = await res.json();
+  if (data.error) {
+    document.getElementById('assessmentBody').innerHTML = `<span class="text-danger">${data.error}</span>`;
+    return;
+  }
+  const riskClass = {'Critical':'risk-critical','High':'risk-high','Moderate':'risk-moderate','Low':'risk-low'}[data.overall_risk] || '';
+  let html = `
+    <div class="row mb-3">
+      <div class="col-auto">
+        <div class="display-6 fw-bold ${riskClass}">${data.overall_risk}</div>
+        <div class="text-muted small">Risk Level</div>
+      </div>
+      <div class="col-auto">
+        <div class="display-6 fw-bold">${data.risk_score}</div>
+        <div class="text-muted small">Score / 100</div>
+      </div>
+    </div>`;
+  if (data.factors.length) {
+    html += '<h6 class="fw-semibold">Contributing Factors</h6><ul class="small mb-3">';
+    data.factors.forEach(f => {
+      html += `<li><strong>${f.factor}</strong> (+${f.weight}): ${f.detail}</li>`;
+    });
+    html += '</ul>';
+  }
+  if (data.recommendations.length) {
+    html += '<h6 class="fw-semibold">Recommendations</h6><ul class="small">';
+    data.recommendations.forEach(r => { html += `<li>${r}</li>`; });
+    html += '</ul>';
+  }
+  html += `<p class="text-muted mt-2" style="font-size:.75rem;">${data.disclaimer}</p>`;
+  document.getElementById('assessmentBody').innerHTML = html;
+}
+</script>
+{% endif %}
+{% endblock %}

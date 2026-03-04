@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — SecureHealth{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Dashboard</li>
+{% endblock %}
+
+{% block content %}
+<h4 class="fw-bold mb-4">
+  Good day, {{ current_user.full_name }}
+  <span class="badge bg-secondary ms-2" style="font-size:.7rem;">{{ current_user.role | title }}</span>
+</h4>
+
+<!-- Stats row -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card text-center p-3">
+      <div class="display-6 fw-bold text-primary">{{ total_patients }}</div>
+      <div class="text-muted small">Patients Enrolled</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center p-3">
+      <div class="display-6 fw-bold text-success">{{ total_records }}</div>
+      <div class="text-muted small">Medical Records</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center p-3">
+      <div class="display-6 fw-bold text-warning">{{ anomaly_count }}</div>
+      <div class="text-muted small">Anomalous Accesses</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center p-3">
+      <i class="bi bi-shield-check text-success" style="font-size:2rem;"></i>
+      <div class="text-muted small mt-1">UOV-GF(256) Active</div>
+      <div style="font-size:.7rem;" class="text-muted">v=12 · o=8 · GF(256)</div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick actions -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <a href="{{ url_for('patients.list_patients') }}" class="card text-decoration-none p-3 d-flex flex-row align-items-center gap-3">
+      <i class="bi bi-people-fill text-primary fs-3"></i>
+      <div><div class="fw-semibold">View Patients</div><div class="text-muted small">Encrypted list</div></div>
+    </a>
+  </div>
+  <div class="col-md-4">
+    <a href="{{ url_for('patients.add_patient') }}" class="card text-decoration-none p-3 d-flex flex-row align-items-center gap-3">
+      <i class="bi bi-person-plus-fill text-success fs-3"></i>
+      <div><div class="fw-semibold">Enroll Patient</div><div class="text-muted small">PHI auto-encrypted</div></div>
+    </a>
+  </div>
+  {% if current_user.is_admin %}
+  <div class="col-md-4">
+    <a href="{{ url_for('admin.dashboard') }}" class="card text-decoration-none p-3 d-flex flex-row align-items-center gap-3">
+      <i class="bi bi-gear-fill text-secondary fs-3"></i>
+      <div><div class="fw-semibold">Admin Panel</div><div class="text-muted small">Logs & key management</div></div>
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Crypto info -->
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-info-circle me-1"></i>Cryptographic Scheme</div>
+  <div class="card-body">
+    <div class="row text-center">
+      <div class="col"><strong>Algorithm</strong><br><span class="text-primary">UOV (Unbalanced Oil &amp; Vinegar)</span></div>
+      <div class="col"><strong>Field</strong><br>GF(256) = GF(2⁸)</div>
+      <div class="col"><strong>Vinegar vars</strong><br>v = 12</div>
+      <div class="col"><strong>Oil vars / block</strong><br>o = 8 bytes</div>
+      <div class="col"><strong>Equations</strong><br>m = 8 quadratic</div>
+      <div class="col"><strong>Hardness</strong><br>MQ Problem (NP-hard)</div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent activity -->
+<div class="card">
+  <div class="card-header"><i class="bi bi-clock-history me-1"></i>Your Recent Activity</div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr><th>Action</th><th>Detail</th><th>Time</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for log in recent_logs %}
+        <tr class="{{ 'anomaly-row' if log.is_anomalous }}">
+          <td><span class="badge bg-secondary">{{ log.action }}</span></td>
+          <td class="small">{{ log.detail or '—' }}</td>
+          <td class="small text-muted">{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td>
+            {% if log.is_anomalous %}
+            <span class="badge bg-danger">⚠ Anomaly</span>
+            {% else %}
+            <span class="badge bg-success">OK</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-center text-muted py-3">No activity yet</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
